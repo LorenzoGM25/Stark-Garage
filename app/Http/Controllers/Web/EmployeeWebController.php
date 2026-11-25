@@ -33,16 +33,15 @@ class EmployeeWebController extends Controller
     public function index(Request $request): View
     {
         $filters = $request->only(['search', 'role', 'status']);
-        $filters['staff_only'] = true;
 
         $employees = $this->users->paginate($filters, 12);
         $shifts = Shift::query()->active()->orderBy('name')->get();
         $roles = Role::options();
 
         $stats = [
-            'total' => User::query()->staff()->count(),
-            'active' => User::query()->active()->staff()->count(),
-            'inactive' => User::query()->staff()->where('is_active', false)->count(),
+            'total' => User::query()->count(),
+            'active' => User::query()->active()->count(),
+            'inactive' => User::query()->where('is_active', false)->count(),
             'payroll_cost' => (float) Payroll::query()
                 ->where('period_month', now()->month)
                 ->where('period_year', now()->year)
@@ -78,6 +77,10 @@ class EmployeeWebController extends Controller
             throw ValidationException::withMessages([
                 'role' => 'Manager tidak dapat membuat akun Owner atau Manager.',
             ]);
+        }
+
+        if (empty($validated['employee_code'])) {
+            $validated['employee_code'] = User::generateEmployeeCode();
         }
 
         $validated['is_active'] = $request->boolean('is_active');
@@ -290,6 +293,33 @@ class EmployeeWebController extends Controller
 
             return back()->with('error', 'Gagal menghapus data karyawan.');
         }
+    }
+
+    public function resetFace(Request $request, User $employee): RedirectResponse
+    {
+        $this->ensureCanManage($request, $employee);
+
+        if (! $employee->hasFace()) {
+            return back()->with('error', 'Karyawan ini belum memiliki data wajah.');
+        }
+
+        $previousRegisteredAt = $employee->face_registered_at?->toIso8601String();
+
+        $employee->forceFill([
+            'face_embedding' => null,
+            'face_registered_at' => null,
+            'pending_face_registration' => true,
+        ])->save();
+
+        $this->audit->log(
+            'employee.face_reset',
+            $employee,
+            "Data wajah karyawan {$employee->name} direset oleh {$request->user()->name}",
+            ['face_registered_at' => $previousRegisteredAt],
+            ['face_registered_at' => null, 'pending_face_registration' => true],
+        );
+
+        return back()->with('success', "Data wajah {$employee->name} berhasil direset. Silakan daftarkan ulang wajah karyawan.");
     }
 
     /** @return array<string, mixed> */

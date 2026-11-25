@@ -116,9 +116,17 @@
                     <div class="attendance-mobile-card border rounded-3 p-3" style="background: var(--sg-surface-subtle);">
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <div class="d-flex align-items-center gap-2" style="min-width: 0;">
-                                <div class="avatar-circle avatar-sm">
-                                    {{ strtoupper(mb_substr($record->user?->name ?? 'K', 0, 1)) }}
-                                </div>
+                                @if($record->photo_proof_path)
+                                    <a href="{{ asset('storage/' . $record->photo_proof_path) }}" target="_blank" title="Lihat Foto Selfie Presensi">
+                                        <img src="{{ asset('storage/' . $record->photo_proof_path) }}" class="rounded-circle border object-fit-cover shadow-sm avatar-sm flex-shrink-0" style="width: 36px; height: 36px;" alt="Selfie">
+                                    </a>
+                                @elseif($record->user?->avatar_url)
+                                    <img src="{{ $record->user->avatar_url }}" class="rounded-circle border object-fit-cover shadow-sm avatar-sm flex-shrink-0" style="width: 36px; height: 36px;" alt="{{ $record->user->name }}">
+                                @else
+                                    <div class="avatar-circle avatar-sm flex-shrink-0">
+                                        {{ strtoupper(mb_substr($record->user?->name ?? 'K', 0, 1)) }}
+                                    </div>
+                                @endif
                                 <div style="min-width: 0;">
                                     <div class="fw-semibold text-truncate">{{ $record->user?->name }}</div>
                                     <small class="text-secondary d-block text-truncate">
@@ -163,12 +171,18 @@
                         </div>
 
                         <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top">
-                            <small class="text-secondary">
+                            <small class="text-secondary d-flex align-items-center gap-1">
                                 <i class="bi bi-shield-check"></i>
                                 {{ strtoupper($record->verification_method ?? 'MANUAL') }}
+                                @if($record->clock_in_latitude && $record->clock_in_longitude)
+                                    &middot;
+                                    <a href="https://www.google.com/maps?q={{ $record->clock_in_latitude }},{{ $record->clock_in_longitude }}" target="_blank" class="text-success text-decoration-none fw-semibold">
+                                        <i class="bi bi-geo-alt-fill"></i> Maps @if($record->distance_meters)({{ $record->distance_meters }}m)@endif
+                                    </a>
+                                @endif
                             </small>
                             @if($record->notes)
-                                <small class="text-secondary text-truncate ms-2" style="max-width: 55%;" title="{{ $record->notes }}">
+                                <small class="text-secondary text-truncate ms-2" style="max-width: 50%;" title="{{ $record->notes }}">
                                     {{ $record->notes }}
                                 </small>
                             @endif
@@ -202,9 +216,17 @@
                             <tr>
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
-                                        <div class="avatar-circle avatar-sm">
-                                            {{ strtoupper(mb_substr($record->user?->name ?? 'K', 0, 1)) }}
-                                        </div>
+                                        @if($record->photo_proof_path)
+                                            <a href="{{ asset('storage/' . $record->photo_proof_path) }}" target="_blank" title="Klik untuk memperbesar foto selfie presensi">
+                                                <img src="{{ asset('storage/' . $record->photo_proof_path) }}" class="rounded-circle border object-fit-cover shadow-sm avatar-sm flex-shrink-0" style="width: 36px; height: 36px;" alt="Selfie">
+                                            </a>
+                                        @elseif($record->user?->avatar_url)
+                                            <img src="{{ $record->user->avatar_url }}" class="rounded-circle border object-fit-cover shadow-sm avatar-sm flex-shrink-0" style="width: 36px; height: 36px;" alt="{{ $record->user->name }}">
+                                        @else
+                                            <div class="avatar-circle avatar-sm flex-shrink-0">
+                                                {{ strtoupper(mb_substr($record->user?->name ?? 'K', 0, 1)) }}
+                                            </div>
+                                        @endif
                                         <div>
                                             <div class="fw-semibold">{{ $record->user?->name }}</div>
                                             <small class="text-secondary">{{ $record->user?->role_label }}</small>
@@ -250,9 +272,21 @@
                                     </span>
                                 </td>
                                 <td class="text-end">
-                                    <span class="badge-pill-soft badge-neutral-soft" style="font-size: 0.7rem;">
-                                        {{ strtoupper($record->verification_method ?? 'MANUAL') }}
-                                    </span>
+                                    <div class="d-flex align-items-center justify-content-end gap-1 flex-wrap">
+                                        @if($record->photo_proof_path)
+                                            <a href="{{ asset('storage/' . $record->photo_proof_path) }}" target="_blank" class="badge bg-light text-primary border text-decoration-none" title="Lihat Bukti Foto Selfie">
+                                                <i class="bi bi-camera-fill"></i> Foto
+                                            </a>
+                                        @endif
+                                        @if($record->clock_in_latitude && $record->clock_in_longitude)
+                                            <a href="https://www.google.com/maps?q={{ $record->clock_in_latitude }},{{ $record->clock_in_longitude }}" target="_blank" class="badge bg-light text-success border text-decoration-none" title="Lihat Lokasi di Google Maps (Lat: {{ $record->clock_in_latitude }}, Lng: {{ $record->clock_in_longitude }}) @if($record->distance_meters) - {{ $record->distance_meters }}m dari kantor @endif">
+                                                <i class="bi bi-geo-alt-fill"></i> GPS @if($record->distance_meters)<span class="small">({{ $record->distance_meters }}m)</span>@endif
+                                            </a>
+                                        @endif
+                                        <span class="badge-pill-soft badge-neutral-soft" style="font-size: 0.7rem;">
+                                            {{ strtoupper($record->verification_method ?? 'MANUAL') }}
+                                        </span>
+                                    </div>
                                 </td>
                             </tr>
                         @empty

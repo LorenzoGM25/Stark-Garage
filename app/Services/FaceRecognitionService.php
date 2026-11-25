@@ -94,6 +94,7 @@ class FaceRecognitionService
             'status' => 'matched',
             'user' => $best['user'],
             'best_user' => $best['user'],
+            'runner_up_user' => $scores[1]['user'] ?? null,
             'score' => $best['score'],
             'runner_up_score' => $runnerUpScore,
             'margin' => $margin,
@@ -176,6 +177,22 @@ class FaceRecognitionService
             throw ValidationException::withMessages([
                 'liveness_score' => 'Pemeriksaan liveness gagal. Silakan ulangi pemindaian wajah.',
             ]);
+        }
+
+        $threshold = $this->settings->faceThreshold();
+        foreach ($this->users->faceProfiles() as $existingUser) {
+            if ($existingUser->id === $user->id) {
+                continue;
+            }
+            if (! is_array($existingUser->face_embedding) || empty($existingUser->face_embedding)) {
+                continue;
+            }
+            $similarity = $this->cosineSimilarity($embedding, $existingUser->face_embedding);
+            if ($similarity >= $threshold) {
+                throw ValidationException::withMessages([
+                    'embedding' => "Wajah ini sudah terdaftar pada akun {$existingUser->name} ({$existingUser->email}). Satu wajah hanya boleh didaftarkan untuk satu akun.",
+                ]);
+            }
         }
 
         $user->forceFill([

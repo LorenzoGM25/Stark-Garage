@@ -137,8 +137,17 @@ class AttendanceService
         $match = $this->face->identify($embedding, $expectedUser?->id);
 
         if ($match['status'] !== 'matched') {
+            $ambiguousDetail = '';
+            if ($match['status'] === 'ambiguous') {
+                $u1 = $match['best_user']?->name;
+                $u2 = $match['runner_up_user']?->name;
+                if ($u1 && $u2) {
+                    $ambiguousDetail = " (mirip akun {$u1} dan {$u2})";
+                }
+            }
+
             $message = match ($match['status']) {
-                'ambiguous' => 'Wajah terlalu mirip dengan lebih dari satu karyawan. Pindai ulang dengan posisi dan pencahayaan yang lebih jelas.',
+                'ambiguous' => 'Wajah terlalu mirip dengan lebih dari satu karyawan' . $ambiguousDetail . '. Pastikan satu wajah hanya terdaftar di satu akun.',
                 'wrong_user' => $expectedUser
                     ? "Wajah tidak cocok dengan akun {$expectedUser->name}. Pastikan Anda menggunakan akun sendiri."
                     : 'Wajah tidak cocok dengan akun yang sedang login.',
@@ -161,17 +170,41 @@ class AttendanceService
         /** @var User $user */
         $user = $match['user'];
         $today = $this->attendances->todayFor($user);
+        $requestedAction = $data['attendance_action'] ?? $data['action'] ?? 'auto';
 
-        if (! $today?->clock_in) {
+        if ($requestedAction === 'clock_in') {
+            if ($today?->clock_in) {
+                throw ValidationException::withMessages([
+                    'attendance' => "Karyawan {$user->name} sudah melakukan Absen Masuk hari ini pukul {$today->clock_in->format('H:i')}. Silakan pilih 'Absen Pulang' jika ingin clock-out.",
+                ]);
+            }
             $attendance = $this->clockIn($user, $data);
             $action = 'clock_in';
-        } elseif (! $today->clock_out) {
+        } elseif ($requestedAction === 'clock_out') {
+            if (! $today?->clock_in) {
+                throw ValidationException::withMessages([
+                    'attendance' => "Karyawan {$user->name} belum melakukan Absen Masuk hari ini. Silakan pilih 'Absen Masuk' terlebih dahulu.",
+                ]);
+            }
+            if ($today->clock_out) {
+                throw ValidationException::withMessages([
+                    'attendance' => "Karyawan {$user->name} sudah melakukan Absen Pulang hari ini pukul {$today->clock_out->format('H:i')}. Presensi hari ini sudah lengkap.",
+                ]);
+            }
             $attendance = $this->clockOut($user, $data);
             $action = 'clock_out';
         } else {
-            throw ValidationException::withMessages([
-                'attendance' => 'Absensi hari ini sudah lengkap.',
-            ]);
+            if (! $today?->clock_in) {
+                $attendance = $this->clockIn($user, $data);
+                $action = 'clock_in';
+            } elseif (! $today->clock_out) {
+                $attendance = $this->clockOut($user, $data);
+                $action = 'clock_out';
+            } else {
+                throw ValidationException::withMessages([
+                    'attendance' => "Absensi untuk {$user->name} hari ini sudah lengkap (Masuk: {$today->clock_in->format('H:i')}, Pulang: {$today->clock_out->format('H:i')}).",
+                ]);
+            }
         }
 
         return [
@@ -316,12 +349,8 @@ class AttendanceService
     {
         $geofence = $this->settings->geofence();
 
-        if (! $geofence['enabled']) {
-            return null;
-        }
-
         if ($latitude === null || $longitude === null) {
-            if ($required) {
+            if ($geofence['enabled'] && $required) {
                 throw ValidationException::withMessages([
                     'latitude' => 'Lokasi GPS wajib diaktifkan untuk melakukan absensi.',
                 ]);
@@ -330,14 +359,17 @@ class AttendanceService
             return null;
         }
 
-        $distance = $this->distanceInMeters(
-            $geofence['latitude'],
-            $geofence['longitude'],
-            (float) $latitude,
-            (float) $longitude,
-        );
+        $distance = null;
+        if (! empty($geofence['latitude']) && ! empty($geofence['longitude'])) {
+            $distance = $this->distanceInMeters(
+                (float) $geofence['latitude'],
+                (float) $geofence['longitude'],
+                (float) $latitude,
+                (float) $longitude,
+            );
+        }
 
-        if ($distance > $geofence['radius']) {
+        if ($geofence['enabled'] && $distance !== null && $distance > $geofence['radius']) {
             throw ValidationException::withMessages([
                 'latitude' => "Anda berada di luar area kantor ({$distance} m dari pusat, maksimal {$geofence['radius']} m).",
             ]);

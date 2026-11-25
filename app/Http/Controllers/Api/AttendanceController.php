@@ -73,8 +73,11 @@ class AttendanceController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
+        $actor = $request->user();
+        $expectedUser = in_array($actor->role, [\App\Enums\Role::Owner, \App\Enums\Role::Manager], true) ? null : $actor;
+
         try {
-            $result = $this->service->recognizeAndToggle($validated['embedding'], $validated, $request->user());
+            $result = $this->service->recognizeAndToggle($validated['embedding'], $validated, $expectedUser);
         } catch (ValidationException $e) {
             throw $e;
         }

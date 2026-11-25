@@ -208,4 +208,56 @@ class EmployeeFaceOnboardingTest extends TestCase
 
         $this->assertAuthenticatedAs($employee->fresh());
     }
+
+    public function test_creating_employee_without_code_auto_generates_employee_code(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $payload = $this->createEmployeePayload();
+        unset($payload['employee_code']);
+        $payload['email'] = 'nocode@stark-garage.local';
+
+        $this->actingAs($owner)
+            ->post(route('admin.employees.store'), $payload);
+
+        $employee = User::where('email', 'nocode@stark-garage.local')->firstOrFail();
+        $this->assertNotNull($employee->employee_code);
+        $this->assertMatchesRegularExpression('/^STG-\d{3,}$/', $employee->employee_code);
+    }
+
+    public function test_all_team_roles_appear_in_employee_index(): void
+    {
+        $owner = User::factory()->owner()->create(['name' => 'Owner Person']);
+        $manager = User::factory()->manager()->create(['name' => 'Manager Person']);
+        $cashier = User::factory()->cashier()->create(['name' => 'Cashier Person']);
+        $mechanic = User::factory()->employee()->create(['name' => 'Mechanic Person']);
+
+        $response = $this->actingAs($owner)->get(route('admin.employees.index'));
+
+        $response->assertOk();
+        $response->assertSee('Owner Person');
+        $response->assertSee('Manager Person');
+        $response->assertSee('Cashier Person');
+        $response->assertSee('Mechanic Person');
+    }
+
+    public function test_reset_face_route_resets_face_and_marks_pending(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $employee = User::factory()->employee()->create([
+            'face_embedding' => $this->embedding(),
+            'face_registered_at' => now(),
+            'pending_face_registration' => false,
+        ]);
+
+        $this->assertTrue($employee->hasFace());
+
+        $this->actingAs($owner)
+            ->post(route('admin.employees.reset-face', $employee))
+            ->assertRedirect();
+
+        $fresh = $employee->fresh();
+        $this->assertFalse($fresh->hasFace());
+        $this->assertNull($fresh->face_registered_at);
+        $this->assertTrue($fresh->pending_face_registration);
+    }
 }

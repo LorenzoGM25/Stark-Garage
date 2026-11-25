@@ -111,12 +111,19 @@
                             <tr>
                                 <td>
                                     <div class="d-flex align-items-center gap-3">
-                                        <div class="avatar-circle avatar-sm">
-                                            {{ strtoupper(mb_substr($employee->name, 0, 2)) }}
-                                        </div>
+                                        @if($employee->avatar_url)
+                                            <img src="{{ $employee->avatar_url }}" class="rounded-circle object-fit-cover border shadow-sm avatar-sm" style="width: 38px; height: 38px;" alt="{{ $employee->name }}">
+                                        @else
+                                            <div class="avatar-circle avatar-sm">
+                                                {{ strtoupper(mb_substr($employee->name, 0, 2)) }}
+                                            </div>
+                                        @endif
                                         <div>
                                             <div class="fw-semibold">{{ $employee->name }}</div>
-                                            <small class="text-secondary">{{ $employee->email }}</small>
+                                            <div class="d-flex align-items-center gap-2 mt-1">
+                                                <span class="badge bg-light text-dark border" style="font-size: .72rem;">{{ $employee->employee_code ?? 'Tanpa kode' }}</span>
+                                                <small class="text-secondary">{{ $employee->email }}</small>
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
@@ -159,6 +166,13 @@
                                         <a href="{{ route('admin.employees.show', $employee) }}" class="btn btn-icon btn-ghost btn-sm text-primary" title="Lihat Profil">
                                             <i class="bi bi-eye"></i>
                                         </a>
+                                        <form action="{{ route('admin.employees.destroy', $employee) }}" method="POST" class="d-inline" onsubmit="return confirm('Apakah Anda yakin ingin menghapus / menonaktifkan data karyawan {{ $employee->name }}?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" title="Hapus / Nonaktifkan Karyawan">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>

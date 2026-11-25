@@ -11,9 +11,13 @@
     <div class="row g-4">
         <div class="col-lg-4">
             <div class="card text-center p-4">
-                <div class="avatar-circle mx-auto mb-3" style="width: 4.5rem; height: 4.5rem; font-size: 1.75rem;">
-                    {{ strtoupper(mb_substr($employee->name, 0, 2)) }}
-                </div>
+                @if($employee->avatar_url)
+                    <img src="{{ $employee->avatar_url }}" class="rounded-circle mx-auto mb-3 object-fit-cover border shadow-sm" style="width: 4.5rem; height: 4.5rem;" alt="{{ $employee->name }}">
+                @else
+                    <div class="avatar-circle mx-auto mb-3" style="width: 4.5rem; height: 4.5rem; font-size: 1.75rem;">
+                        {{ strtoupper(mb_substr($employee->name, 0, 2)) }}
+                    </div>
+                @endif
                 <h5 class="fw-bold mb-1">{{ $employee->name }}</h5>
                 <span class="badge-pill-soft badge-info-soft mx-auto mb-3">{{ $employee->role_label }}</span>
                 <div class="text-secondary small">{{ $employee->email }}</div>
@@ -40,9 +44,21 @@
                     <span class="small fw-bold text-primary">Rp {{ number_format($employee->base_salary, 0, ',', '.') }}</span>
                 </div>
 
-                <a href="{{ route('admin.employees.index') }}" class="btn btn-secondary btn-sm w-100">
-                    <i class="bi bi-arrow-left"></i> Kembali ke Daftar
-                </a>
+                <div class="d-flex flex-column gap-2">
+                    <a href="{{ route('admin.employees.edit', $employee) }}" class="btn btn-primary btn-sm w-100">
+                        <i class="bi bi-pencil"></i> Edit Data Karyawan
+                    </a>
+                    <a href="{{ route('admin.employees.index') }}" class="btn btn-secondary btn-sm w-100">
+                        <i class="bi bi-arrow-left"></i> Kembali ke Daftar
+                    </a>
+                    <form action="{{ route('admin.employees.destroy', $employee) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus / menonaktifkan data karyawan ini?');">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                            <i class="bi bi-trash"></i> Hapus / Nonaktifkan
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
 
@@ -70,12 +86,22 @@
                             @endif
 
                             @if(in_array(auth()->user()?->role?->value, ['owner', 'manager'], true))
-                                <a href="{{ route('admin.attendance.face', $employee->needsFaceRegistration()
-                                    ? ['user_id' => $employee->id, 'mode' => 'register', 'onboarding' => 1]
-                                    : ['user_id' => $employee->id, 'mode' => 'register']) }}" class="btn btn-primary btn-sm">
-                                    <i class="bi bi-person-bounding-box"></i>
-                                    {{ $employee->needsFaceRegistration() ? 'Lanjutkan Pendaftaran Wajah' : ($employee->hasFace() ? 'Daftarkan Ulang Wajah' : 'Daftarkan Wajah') }}
-                                </a>
+                                <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                    <a href="{{ route('admin.attendance.face', $employee->needsFaceRegistration()
+                                        ? ['user_id' => $employee->id, 'mode' => 'register', 'onboarding' => 1]
+                                        : ['user_id' => $employee->id, 'mode' => 'register']) }}" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-person-bounding-box"></i>
+                                        {{ $employee->needsFaceRegistration() ? 'Lanjutkan Pendaftaran Wajah' : ($employee->hasFace() ? 'Daftarkan Ulang Wajah' : 'Daftarkan Wajah') }}
+                                    </a>
+                                    @if($employee->hasFace())
+                                        <form action="{{ route('admin.employees.reset-face', $employee) }}" method="POST" onsubmit="return confirm('Reset data wajah karyawan {{ $employee->name }}? Karyawan perlu mendaftarkan wajah ulang.');">
+                                            @csrf
+                                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                <i class="bi bi-arrow-repeat"></i> Reset Wajah
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
                             @endif
                         </div>
                     </div>

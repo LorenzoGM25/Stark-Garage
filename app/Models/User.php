@@ -104,7 +104,23 @@ class User extends Authenticatable
 
     public function scopeStaff($query)
     {
-        return $query->whereIn('role', [Role::Employee->value, Role::Cashier->value]);
+        return $query->whereIn('role', [Role::Manager->value, Role::Employee->value, Role::Cashier->value]);
+    }
+
+    public static function generateEmployeeCode(): string
+    {
+        $maxNum = 0;
+        $codes = static::query()->whereNotNull('employee_code')->pluck('employee_code');
+        foreach ($codes as $code) {
+            if (preg_match('/STG-(\d+)/i', $code, $m)) {
+                $num = (int) $m[1];
+                if ($num > $maxNum) {
+                    $maxNum = $num;
+                }
+            }
+        }
+
+        return sprintf('STG-%03d', $maxNum + 1);
     }
 
     public function hasFace(): bool

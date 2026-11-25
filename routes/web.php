@@ -44,6 +44,7 @@ Route::middleware(['auth', 'active', 'record.activity'])->prefix('admin')->name(
 
     Route::middleware('role:owner,manager')->group(function () {
         Route::resource('products', ProductWebController::class);
+        Route::post('employees/{employee}/reset-face', [EmployeeWebController::class, 'resetFace'])->name('employees.reset-face');
         Route::resource('employees', EmployeeWebController::class);
 
         Route::get('attendance', [AttendanceWebController::class, 'index'])->name('attendance.index');

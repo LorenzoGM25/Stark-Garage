@@ -41,7 +41,7 @@ class AttendanceWebController extends Controller
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        $staff = User::query()->active()->staff()->orderBy('name')->get();
+        $staff = User::query()->active()->orderBy('name')->get();
 
         $stats = [
             'on_time' => (int) ($statusCounts[AttendanceStatus::OnTime->value] ?? 0),

@@ -62,6 +62,7 @@ class FaceAttendanceWebController extends Controller
             'embedding' => ['required', 'array'],
             'embedding.*' => ['required', 'numeric'],
             'liveness_score' => ['nullable', 'numeric', 'between:0,1'],
+            'photo_base64' => ['nullable', 'string'],
         ]);
 
         $actor = $request->user();
@@ -76,6 +77,19 @@ class FaceAttendanceWebController extends Controller
         $onboarding = $request->boolean('onboarding') && $this->canManageFaces($actor);
         $wasPending = $target->needsFaceRegistration();
         $previousRegisteredAt = $target->face_registered_at?->toIso8601String();
+
+        if ($request->filled('photo_base64')) {
+            $base64 = $request->input('photo_base64');
+            if (preg_match('/^data:image\/(\w+);base64,/', $base64, $matches)) {
+                $ext = strtolower($matches[1]) === 'png' ? 'png' : 'jpg';
+                $binary = base64_decode(substr($base64, strpos($base64, ',') + 1));
+                if ($binary !== false) {
+                    $avatarPath = 'avatars/avatar_' . $target->id . '_' . time() . '.' . $ext;
+                    \Illuminate\Support\Facades\Storage::disk('public')->put($avatarPath, $binary);
+                    $target->forceFill(['avatar_path' => $avatarPath])->save();
+                }
+            }
+        }
 
         $target = $this->face->register(
             $target,
@@ -112,6 +126,7 @@ class FaceAttendanceWebController extends Controller
                 'name' => $target->name,
                 'role_label' => $target->role_label,
                 'has_face' => $target->hasFace(),
+                'avatar_url' => $target->avatar_url,
                 'pending_face_registration' => $target->pending_face_registration,
                 'face_registered_at' => $target->face_registered_at?->toIso8601String(),
             ],
@@ -124,14 +139,19 @@ class FaceAttendanceWebController extends Controller
             'embedding' => ['required', 'array'],
             'embedding.*' => ['required', 'numeric'],
             'liveness_score' => ['nullable', 'numeric', 'between:0,1'],
+            'attendance_action' => ['nullable', 'string', 'in:auto,clock_in,clock_out'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'photo_proof_path' => ['nullable', 'string', 'max:255'],
+            'photo_base64' => ['nullable', 'string'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $actor = $request->user();
+        $expectedUser = in_array($actor->role, [Role::Owner, Role::Manager], true) ? null : $actor;
+
         try {
-            $result = $this->attendance->recognizeAndToggle($validated['embedding'], $validated, $request->user());
+            $result = $this->attendance->recognizeAndToggle($validated['embedding'], $validated, $expectedUser);
         } catch (ValidationException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -139,12 +159,27 @@ class FaceAttendanceWebController extends Controller
             ], 422);
         }
 
+        // Only save photo proof AFTER verification and attendance successfully recorded
+        if ($request->filled('photo_base64')) {
+            $base64 = $request->input('photo_base64');
+            if (preg_match('/^data:image\/(\w+);base64,/', $base64, $matches)) {
+                $ext = strtolower($matches[1]) === 'png' ? 'png' : 'jpg';
+                $binary = base64_decode(substr($base64, strpos($base64, ',') + 1));
+                if ($binary !== false) {
+                    $dateStr = $result['attendance']->date ? $result['attendance']->date->format('Ymd') : date('Ymd');
+                    $path = 'attendances/' . date('Y/m') . '/att_' . $result['user']->id . '_' . $dateStr . '.' . $ext;
+                    \Illuminate\Support\Facades\Storage::disk('public')->put($path, $binary);
+                    $result['attendance']->forceFill(['photo_proof_path' => $path])->save();
+                }
+            }
+        }
+
         $attendance = $result['attendance']->load('shift');
 
         return response()->json([
             'message' => $result['action'] === 'clock_in'
-                ? 'Clock-in berhasil melalui face recognition.'
-                : 'Clock-out berhasil melalui face recognition.',
+                ? "Clock-in berhasil untuk {$result['user']->name}."
+                : "Clock-out berhasil untuk {$result['user']->name}.",
             'action' => $result['action'],
             'score' => $result['score'],
             'user' => [
@@ -160,6 +195,7 @@ class FaceAttendanceWebController extends Controller
                 'late_minutes' => $attendance->late_minutes,
                 'overtime_minutes' => $attendance->overtime_minutes,
                 'shift_name' => $attendance->shift?->name,
+                'photo_url' => $attendance->photo_proof_path ? asset('storage/' . $attendance->photo_proof_path) : null,
             ],
         ]);
     }
